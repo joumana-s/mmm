@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -8,9 +9,10 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { ImageIcon } from 'lucide-react';
 
+const initialPlaceholderImages = ['placeholder1.jpg', 'placeholder2.jpg', 'placeholder3.jpg'];
 
 export default function ImageResizerPage() {
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<string[]>(initialPlaceholderImages);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [, setGeneratedUrl] = useState<string | null>(null); // URL state managed here for potential broader use
   const { toast } = useToast();
@@ -22,11 +24,23 @@ export default function ImageResizerPage() {
         const errorResult = await response.json();
         throw new Error(errorResult.message || 'Failed to fetch images');
       }
-      const imageList = await response.json();
-      setImages(imageList);
+      const fetchedImageList: string[] = await response.json();
+      // Combine initial placeholders with fetched images, ensuring no duplicates
+      setImages(prevImages => {
+        const currentPlaceholders = initialPlaceholderImages.filter(p => !fetchedImageList.includes(p));
+        const combined = Array.from(new Set([...currentPlaceholders, ...fetchedImageList]));
+         // If initial state had placeholders not fetched, and API returns empty, ensure placeholders remain.
+        if (fetchedImageList.length === 0 && prevImages.some(img => initialPlaceholderImages.includes(img))) {
+            return Array.from(new Set([...initialPlaceholderImages, ...prevImages]));
+        }
+        return combined;
+      });
     } catch (error) {
       toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
-      setImages([]); // Set to empty array on error
+      // On error, retain initial placeholders or previously fetched images if any, otherwise clear.
+      // For robustness, you might want to decide if initialPlaceholders should always persist.
+      // Here, we ensure they are present if the fetch fails and they were in the initial list.
+      setImages(prev => Array.from(new Set([...initialPlaceholderImages, ...prev.filter(img => !initialPlaceholderImages.includes(img))])));
     }
   }, [toast]);
 
