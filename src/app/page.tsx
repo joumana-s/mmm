@@ -25,24 +25,33 @@ export default function ImageResizerPage() {
         throw new Error(errorResult.message || 'Failed to fetch images');
       }
       const fetchedImageList: string[] = await response.json();
-      // Combine initial placeholders with fetched images, ensuring no duplicates
+      // Combine initial placeholders with fetched images, ensuring no duplicates.
+      // The primary source of truth for available images should be fetchedImageList if the API call is successful.
+      // The Set automatically handles deduplication if initialPlaceholderImages are also in fetchedImageList.
       setImages(prevImages => {
-        const currentPlaceholders = initialPlaceholderImages.filter(p => !fetchedImageList.includes(p));
-        const combined = Array.from(new Set([...currentPlaceholders, ...fetchedImageList]));
-         // If initial state had placeholders not fetched, and API returns empty, ensure placeholders remain.
+        // If fetchedImageList successfully gets the images from public/images (including the placeholders now),
+        // this logic should correctly update the list.
+        const currentPlaceholdersNotInFetched = initialPlaceholderImages.filter(p => !fetchedImageList.includes(p));
+        const combinedAndDeduplicated = Array.from(new Set([...currentPlaceholdersNotInFetched, ...fetchedImageList]));
+
+        // This condition is a bit complex: if fetch returns empty AND we previously had placeholders, try to keep them.
+        // However, if fetch is successful and returns what's in public/images, that should be the source.
         if (fetchedImageList.length === 0 && prevImages.some(img => initialPlaceholderImages.includes(img))) {
-            return Array.from(new Set([...initialPlaceholderImages, ...prevImages]));
+            // If API returns nothing, but we had placeholders, try to merge with previous non-placeholder images.
+            const prevNonPlaceholders = prevImages.filter(img => !initialPlaceholderImages.includes(img));
+            return Array.from(new Set([...initialPlaceholderImages, ...prevNonPlaceholders]));
         }
-        return combined;
+        return combinedAndDeduplicated;
       });
     } catch (error) {
       toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
-      // On error, retain initial placeholders or previously fetched images if any, otherwise clear.
-      // For robustness, you might want to decide if initialPlaceholders should always persist.
-      // Here, we ensure they are present if the fetch fails and they were in the initial list.
-      setImages(prev => Array.from(new Set([...initialPlaceholderImages, ...prev.filter(img => !initialPlaceholderImages.includes(img))])));
+      // On error, attempt to show initial placeholders plus any previously known non-placeholder images.
+      setImages(prevImages => {
+        const prevNonPlaceholders = prevImages.filter(img => !initialPlaceholderImages.includes(img));
+        return Array.from(new Set([...initialPlaceholderImages, ...prevNonPlaceholders]));
+      });
     }
-  }, [toast]);
+  }, [toast]); // initialPlaceholderImages is a module-level const, stable.
 
   useEffect(() => {
     fetchImages();
